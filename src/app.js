@@ -1,8 +1,10 @@
+
 import {
   addCapability,
   addEvent,
   createInitialState,
   createReview,
+  getSavedEvents,
   deleteCapability,
   getPrompts,
   updateCapability,
@@ -54,9 +56,8 @@ function chineseDate(value = new Date()) {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value));
 }
 
-function todaysEvents() {
-  const today = localDate();
-  return state.events.filter(event => localDate(event.createdAt) === today);
+function savedEvents() {
+  return getSavedEvents(state);
 }
 
 function persist(nextState) {
@@ -136,10 +137,26 @@ function eventCard(event, selectable = false, selected = false) {
   </article>`;
 }
 
+function renderEventArchive(events, selectable = false, selectedIds = []) {
+  const selected = new Set(selectedIds);
+  const groups = new Map();
+  for (const event of events) {
+    const day = localDate(event.createdAt);
+    const group = groups.get(day) ?? [];
+    group.push(event);
+    groups.set(day, group);
+  }
+
+  return [...groups.values()].map(group => {
+    const title = localDate(group[0].createdAt) === localDate() ? '今天' : chineseDate(group[0].createdAt);
+    return `<section class="event-day"><h3 class="event-day-title">${title}</h3><div class="event-list">${group.map(event => eventCard(event, selectable, selected.has(event.id))).join('')}</div></section>`;
+  }).join('');
+}
+
 function renderInbox() {
   const typeOptions = [['', '不分类'], ['work', '工作'], ['life', '生活'], ['social', '社交'], ['idea', '灵感']]
     .map(([type, label]) => `<button type="button" class="choice ${captureDraft.type === type ? 'selected' : ''}" data-capture-type="${type}">${label}</button>`).join('');
-  const events = todaysEvents();
+  const events = savedEvents();
   return renderShell(`
     <section class="capture">
       <form id="capture-form" class="stack">
@@ -148,8 +165,8 @@ function renderInbox() {
         <button class="button" type="submit">保存这条记录</button>
       </form>
     </section>
-    <div class="section-heading"><strong>今天收下的内容</strong><span class="meta">${events.length} 条</span></div>
-    <section class="event-list">${events.length ? events.map(event => eventCard(event)).join('') : '<div class="empty">还没有记录。<br>灵感、想法和重要信息，都可以先放在这里。</div>'}</section>
+    <div class="section-heading"><strong>已保存的内容</strong><span class="meta">${events.length} 条</span></div>
+    <section class="event-archive">${events.length ? renderEventArchive(events) : '<div class="empty">还没有已保存的记录。<br>灵感、想法和重要信息，都可以先放在这里。</div>'}</section>
   `);
 }
 
@@ -181,7 +198,7 @@ function renderCapabilityManager() {
 }
 
 function renderReview() {
-  const events = todaysEvents();
+  const events = savedEvents();
   const prompts = reviewPrompts();
   const options = [['quick', '极速', '1 分钟'], ['standard', '标准', '3–5 分钟'], ['deep', '深度', '10 分钟']]
     .map(([mode, label, description]) => `<button type="button" class="mode ${reviewDraft.mode === mode ? 'active' : ''}" data-mode="${mode}"><strong>${label}</strong><small>${description}</small></button>`).join('');
@@ -192,7 +209,7 @@ function renderReview() {
       <div><h2>今日复盘</h2><p class="intro">复盘是独立的思考。先写下你想看清的那件事；记录只在需要时作为参考。</p></div>
       <form id="review-form" class="stack-lg">
         <label>1. 今天想复盘什么？<textarea name="reviewSubject" placeholder="例如：我在会议上太快否定了同事的建议。">${escapeHtml(reviewDraft.subject)}</textarea></label>
-        <details class="panel"><summary>从今天的记录中带入（可选）</summary>${events.length ? `<div class="event-list">${events.map(event => eventCard(event, true, reviewDraft.eventIds.includes(event.id))).join('')}</div>` : '<p class="meta">今天还没有收集内容；这不影响你直接开始复盘。</p>'}</details>
+        <details class="panel"><summary>从已保存的记录中带入（可选）</summary>${events.length ? `<div class="event-archive">${renderEventArchive(events, true, reviewDraft.eventIds)}</div>` : '<p class="meta">还没有已保存的记录；这不影响你直接开始复盘。</p>'}</details>
         <div class="stack"><strong>2. 今天想复盘到什么深度？</strong><div class="mode-grid">${options}</div></div>
         <label>3. 要用哪项能力来观察？<span class="field-note">可选；会追加你自己写的问题</span><select id="capability-select" name="capabilityId">${capabilityOptions}</select></label>
         <div class="stack"><strong>4. 回答这些问题</strong>${questionFields}</div>
