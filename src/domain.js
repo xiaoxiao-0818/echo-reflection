@@ -1,3 +1,4 @@
+
 const CORE_PROMPTS = {
   quick: ['今天最大的问题是什么？', '下次遇到类似情况，我具体怎么做？'],
   standard: ['发生了什么？', '我当时为什么这么做？', '哪里判断得不够好？', '下次遇到类似情况，我具体怎么做？'],
@@ -26,6 +27,12 @@ function copyState(state) {
 
 export function createInitialState() {
   return { events: [], capabilities: [], reviews: [], rules: [] };
+}
+
+export function getSavedEvents(state) {
+  return [...(state?.events ?? [])].sort((left, right) => {
+    return Date.parse(right.createdAt ?? '') - Date.parse(left.createdAt ?? '');
+  });
 }
 
 export function getPrompts(mode, capability) {
